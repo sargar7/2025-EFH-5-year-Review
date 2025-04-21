@@ -10,6 +10,11 @@ install.packages("raster")
 install.packages("ggmap")
 install.packages("stringr")
 install.packages("tmap")
+install.packages("maptiles")
+install.packages("ggspatial")
+install.packages("prettymapr")
+install.packages("rosm")
+
 
 library(sf)
 library(raster)
@@ -19,6 +24,10 @@ library(tidyr)
 library(dplyr)
 library(stringr)
 library(tmap)
+library(maptiles)
+library(ggspatial)
+library(rosm)
+library(prettymapr)
 
 
 setwd("C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/2025 GIS Clipped Habitat")
@@ -149,11 +158,22 @@ print(gag_EJ_sf)
 
 #time to plot 
 
+# Set bounding box for Gulf of Mexico
+bbox_gom <- sf::st_bbox(c(xmin = -98, xmax = -80, ymin = 18, ymax = 31), crs = sf::st_crs(gag_EJ_sf))
+
+
 tmap_mode("plot")
-tm_shape(gag_EJ_sf)+
+gag_EJ<-tm_shape(gag_EJ_sf,bbox= bbox_gom)+
   tm_basemap("Esri.WorldImagery") + 
-  tm_fill(col= "lightblue")+
-  tm_borders(col= "black")+
-  tm_title=("Gag Early Juvenile EFH")
+  tm_fill(fill= "lightblue", col= NA, fill_alpha =1)+
+  tm_borders(col=NA)+
+  tm_title ("Gag Early Juvenile EFH")+
+  tm_layout(legend.position = c("left", "bottom"), legend.bg.color ="white", frame=FALSE)
 
+##see map 
+print(gag_EJ)
 
+##cool the bbox function worked to create where i want the map cropped, and the esri is the correct base map
+##now to sort out the coloring and legend placement. 
+##need to figure out how to automate the shapefiles to pull the right shapefile for each species without hand-coding it. 
+##maybe ask John? Verena?
