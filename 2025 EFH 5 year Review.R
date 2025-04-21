@@ -8,74 +8,24 @@
 install.packages("sf")
 install.packages("raster")
 install.packages("ggmap")
+install.packages("stringr")
+install.packages("tmap")
 
 library(sf)
 library(raster)
 library(ggplot2)
 library(ggmap)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(tmap)
 
-
-#import shapefile 
-shapefile_path <-file.choose ()
-shapefile <-st_read(shapefile_path)
-
-EM_gulfwide <- st_read("C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/2025 GIS Clipped Habitat/EM/shapefiles/EM_gulfwide_2025.shp")
-summary(EM_gulfwide)
-
-##view geometry type 
-st_geometry_type(EM_gulfwide)
-st_crs(EM_gulfwide)
-st_bbox(EM_gulfwide)
-
-##plot the shapefile 
-
-plot(EM_gulfwide)
-
-ggplot(data= EM_gulfwide) +
-  geom_sf(data=EM_gulfwide, size=1.5, color="black", fill="lightblue") +
-  ggtitle("EM_gulfwide") + 
-  coord_sf()
-
-ggplot(data = EM_gulfwide) +
-  geom_sf(size = 1.5, color = "black", fill = "lightblue") +
-  ggtitle("EM_gulfwide") + 
-  coord_sf()
-  
-
-
-
-##upload habitat shapefiles by habitat zone and ecoregion 
 
 setwd("C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/2025 GIS Clipped Habitat")
 ##list habitat type folders (subfolders in main directory)
 
-habitattype_folders <-list.dirs (path= ".", full.names= TRUE, recursive = FALSE)
-print(habitattype_folders)
+##upload habitat shapefiles by habitat zone and ecoregion 
 
-##initialize empty list to store shapefiles 
-shapefile_list <-list()
-
-##create a loop through each habitat type folder
-
-for(habitattype in habitattype_folders) {
-  #list of shapefiles (.shp) in the subfolders 
-  shapefiles<- list.files(path =habitattype, pattern = "\\.shp$", full.names=TRUE, recursive =TRUE)
-}
-
-##are the shapefiles in the folder?
-
-if (length(shapefiles) >0) {
-  ##loop through each shp and load it 
-  for (shapefile in shapefiles) {
-    #load shapefile using sf package 
-    shapefile_name <- gsub(".*/(.*)\\.shp", "\\1", shapefile)  # Extract file name without path and extension
-    shapefile_list[[shapefile_name]] <- st_read(shapefile)
-  }
-}
-
-print(names(shapefile_list))
-
-####test from chatgpt
 # List all habitat type folders (directories) in the current directory
 habitattype_folders <- list.dirs(path = ".", full.names = TRUE, recursive = FALSE)
 print(habitattype_folders)
@@ -105,25 +55,105 @@ for (folder in habitattype_folders) {
 # Print the names of the shapefiles that were loaded
 print(names(shapefile_list))
 
-##running into issues with WCA files not containing WCA in the name- may need to rename in GIS so that it translates better
-##i think i may need to "code" my shapefiles differently/ organize them in a folder by habitat zone then eco region then habitat type? 
-##not sure how i would automate this to run the code and pull the correct shapefiles for each species lifestage- currently the code would be just 
-#labor intensive as running it by hand in GIS 
+##cleanup shapefiles 
 
-##the only pro is that it would be reproduceable once shapefiles were updated? 
+# Check column types of each shapefile in the list
+lapply(shapefile_list, function(x) sapply(x, class))
+
+#some are numerical and some are characters, some are SFC_POLYGON
+
+##SFC polygons remain the same since those are how the code plots the polygons on the map, converting others 
+# Function to clean and ensure consistent column types across all shapefiles
+clean_shapefiles <- function(shapefile) {
+  # Convert all non-geometry columns to numeric (or character if needed)
+  shapefile[] <- lapply(shapefile, function(col) {
+    # Check if column is not geometry
+    if (!inherits(col, "sfc")) {
+      # Convert columns to numeric (or character as necessary)
+      return(as.numeric(col))
+    }
+    return(col)  # Keep geometry columns as they are
+  })
+  
+  return(shapefile)
+}
+
+# Apply the cleaning function to all shapefiles in shapefile_list
+shapefile_list <- lapply(shapefile_list, clean_shapefiles)
+
+##shapefiles contain different CRS (coordinate reference system), which can cause alignment issues when being overlayed on a map. 
+
+#reproject shapefiles to WGS84 (ESPG:4326)->> World Geodetic System 1984. It is a global geodetic reference system used for GPS (Global Positioning System) and other navigation and mapping applications. 
+
+shapefile_list_reprojected <- lapply(shapefile_list, function(shp) {st_transform(shp, crs = 4326)})
+
+# Check the CRS of the reprojected shapefiles
+st_crs(shapefile_list_reprojected[["mangrove_est_ER1"]])
+
+###########################################################################################################
 
 ##gag example dataset
+Gag<- read.csv("C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/Gag_EX_data_Rcode.csv")
+View(Gag)
 
-gag<- read.csv(file.choose())
-View(gag)
-file_path <- normalizePath("Gag_EX_data_Rcode.csv")
-print(file_path)
+##separate values that are followed by commas into separate row
+Gag_long <-Gag %>%
+  separate_rows(HabitatZone, sep = ",\\s*") %>%
+  separate_rows(HabitatType, sep = ",\\s*") %>%
+  separate_rows(Ecoregion, sep = ",\\s*")
 
-##convert habitat type, zone and ecoregion to factor type 
+View(Gag_long)
 
-gag$Species <- factor(gag$Species)
-gag$Lifestage <- factor(gag$Lifestage, levels = c("egg", "larvae", "postlarvae", "earlyjuvenile", "latejuvenile", "adult", "spawning adult"))
-gag$HabitatZone <- factor(gag$HabitatZone, levels = c("off", "near", "est"))
-gag$HabitatType <- factor(gag$HabitatType, levels = c("EM", "HB", "Man", "oyster", "reef", "sand", "SAV", "shelf", "SB", "WCA"))
-gag$Ecoregion <- factor(gag$Ecoregion, levels = 1:5)
+##rename man to mangrove 
+
+Gag_long$HabitatType[Gag_long$HabitatType == "man"] <- "mangrove"
+Gag_long$HabitatHype <- NULL
+
+View(Gag_long)
+##overlaying shapefiles based on Gag_long 
+
+Gag_clean <- Gag_long %>%
+  mutate(
+    HabitatType = str_to_title(HabitatType), #EM, HB,mangrove, oyster, reef, sand, SAV, shelf, SB, WCA
+    HabitatZone = str_to_lower(HabitatZone), #est, near, off
+    Ecoregion = paste0 ("ER", Ecoregion), # ER1, ER2, ER3, ER4, ER5 
+    shapefile_name = paste(HabitatType, HabitatZone, Ecoregion, sep ="_"))
+View(Gag_clean)
+
+##early juvenile test map 
+
+##EJ shapefiles manual pull 
+
+gag_EJ_shapes <- c(
+    "mangrove_est_ER1","mangrove_est_ER2","mangrove_est_ER3",
+  "mangrove_near_ER1","mangrove_near_ER2","mangrove_near_ER3","SAV_est_ER1","SAV_est_ER2","SAV_est_ER3",
+  "SAV_near_ER1","SAV_near_ER2","SAV_near_ER3"
+) 
+
+#check shapefile list 
+missing_shapes <- setdiff(gag_EJ_shapes, names(shapefile_list_reprojected))
+
+if(length(missing_shapes) > 0) {
+  print("Missing shapefiles:")
+  print(missing_shapes)
+} else {
+  print("All shapefiles found in shapefile_list.")
+}
+
+#combine into one sf object 
+gag_EJ_sf<- lapply(gag_EJ_shapes, function(name) shapefile_list_reprojected[[name]])%>%
+  bind_rows(.id = "Source") ##source shows which shapefile each feature came from
+
+#check combined 
+print(gag_EJ_sf)
+
+#time to plot 
+
+tmap_mode("plot")
+tm_shape(gag_EJ_sf)+
+  tm_basemap("Esri.WorldImagery") + 
+  tm_fill(col= "lightblue")+
+  tm_borders(col= "black")+
+  tm_title=("Gag Early Juvenile EFH")
+
 
