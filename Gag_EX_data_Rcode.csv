@@ -1,0 +1,8 @@
+Species,Lifestage,HabitatZone,HabitatType,Ecoregion
+Gag,Egg,off,WCA,"1,2"
+Gag,Larvae,off,WCA,"1,2"
+Gag,PostLarvae,off,WCA,"1,2"
+Gag,EarlyJuvenile,"est,near","SAV, man","1,2,3"
+Gag,LateJuvenile,"est,near,off","SAV, man, HB,reef","1,2,3,4"
+Gag,Adult,"near, off","HB, reef","1,2,3,4,5"
+Gag,SpawningAdult,"near, off","shelf, HB","1,2,3,4,5"
