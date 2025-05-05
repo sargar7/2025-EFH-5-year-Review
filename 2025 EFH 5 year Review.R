@@ -23,16 +23,16 @@ library(ggspatial)
 library(leaflet)
 library(htmlwidgets)
 library(webshot2)
+library(tidyr)
 library(rmapshaper) ##simplify shapefiles to help processing time for maps
 
-
-setwd("C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/2025 GIS Clipped Habitat")
-##list habitat type folders (subfolders in main directory)
+getwd()
 
 ##upload habitat shapefiles by habitat zone and ecoregion 
+habitat_dir<-"C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/2025 GIS Clipped Habitat"
 
 # List all habitat type folders (directories) in the current directory
-habitattype_folders <- list.dirs(path = ".", full.names = TRUE, recursive = FALSE)
+habitattype_folders <- list.dirs(path = habitat_dir, full.names = TRUE, recursive = FALSE)
 print(habitattype_folders)
 
 # Initialize an empty list to store shapefiles
@@ -160,8 +160,33 @@ names(shapefile_list_reprojected) <- names(shapefile_list) ##match names for fut
 
 
 
+################ Species Habitat Tables- Full dataset ###################
 
-###########################################################################################################
+species_habitat<- read.csv("C:/Users/Sarah/GOM/Gulf of Mexico - Documents/EFH/EFH Generic Amendment 5/species_habitatattributes.csv")
+View(species_habitat)
+
+##separate values that are followed by commas into separate row
+species_habitat_long <-species_habitat %>%
+  separate_rows(habitatzone, sep = ",\\s*") %>%
+  separate_rows(habitattype, sep = ",\\s*") %>%
+  separate_rows(ecoregion, sep = ",\\s*")
+
+
+##clean up, make all lowercase and remove any additional spaces
+species_habitat_clean <- species_habitat_long %>%
+  mutate(
+    habitattype = str_trim(str_to_lower(habitattype)), #EM, HB,mangrove, oyster, reef, sand, SAV, shelf, SB, WCA
+    habitatzone = str_trim(str_to_lower(habitatzone)), #est, near, off
+    species = str_trim(str_to_lower(species)),
+    lifestage = str_trim(str_to_lower(lifestage)),
+    ecoregion = paste0 ("er", ecoregion), # ER1, ER2, ER3, ER4, ER5 
+    shapefile_name = paste(habitattype, habitatzone, ecoregion, sep ="_"))
+View(species_habitat_clean)
+
+
+############################# Gag EX Leaflet ################################
+
+####################################GAG DATA###############################################################
 
 Gag<- read.csv("C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/Gag_EX_data_Rcode.csv")
 View(Gag)
@@ -191,10 +216,7 @@ Gag_clean <- Gag_long %>%
     Ecoregion = paste0 ("er", Ecoregion), # ER1, ER2, ER3, ER4, ER5 
     shapefile_name = paste(HabitatType, HabitatZone, Ecoregion, sep ="_"))
 View(Gag_clean)
-
-
-############################# Gag EX Leaflet ################################
-################### Full Dataset ######################
+###############creating habitat maps ################
 
 # Define base output directory for saving all files
 output_dir <- "C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/Maps_Output"
