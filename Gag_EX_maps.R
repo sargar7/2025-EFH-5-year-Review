@@ -80,32 +80,39 @@ shapefile_list <- lapply(shapefile_list, clean_shapefiles)
 # Reproject all to WGS84 (EPSG:4326)
 shapefile_list <- lapply(shapefile_list, function(shp) st_transform(shp, crs = 4326))
 
-# Simplify if needed based on feature count 
-# Several shapefiles >5000
-simplify_threshold <- 5000
-get_keep_ratio <- function(n_features) {
-  if (n_features > 50000) return(0.005)
-  if (n_features > 20000) return(0.01)
-  if (n_features > 10000) return(0.02)
-  return(0.03)
-}
-
-# Apply simplification and preserve names
-shapefile_list <- setNames(lapply(names(shapefile_list), function(name) {
-  shp <- shapefile_list[[name]]
-  if (!is.null(shp)) {
-    n_feat <- nrow(shp)
-    if (n_feat > simplify_threshold) {
-      kr <- get_keep_ratio(n_feat)
-      message(sprintf("Simplifying %s (%d features) with keep_ratio %.3f", name, n_feat, kr))
-      shp <- rmapshaper::ms_simplify(shp, keep = kr, keep_shapes = TRUE)
-    }
-  }
-  return(shp)
-}), tolower(names(shapefile_list)))  # also convert names to lowercase here
+names(shapefile_list) <- tolower(names(shapefile_list))
 
 # Remove any NULLs to prevent st_write() errors
 shapefile_list <- shapefile_list[!sapply(shapefile_list, is.null)]
+
+View(shapefile_list)
+
+##### Simplify if needed based on feature count 
+# Several shapefiles >5000
+#simplify_threshold <- 5000
+#get_keep_ratio <- function(n_features) {
+ # if (n_features > 50000) return(0.005)
+  #if (n_features > 20000) return(0.01)
+#  if (n_features > 10000) return(0.02)
+ # return(0.03)
+#}
+
+# Apply simplification and preserve names
+#shapefile_list <- setNames(lapply(names(shapefile_list), function(name) {
+ # shp <- shapefile_list[[name]]
+#  if (!is.null(shp)) {
+ #   n_feat <- nrow(shp)
+  #  if (n_feat > simplify_threshold) {
+   #   kr <- get_keep_ratio(n_feat)
+    #  message(sprintf("Simplifying %s (%d features) with keep_ratio %.3f", name, n_feat, kr))
+     # shp <- rmapshaper::ms_simplify(shp, keep = kr, keep_shapes = TRUE)
+  #  }
+#  }
+ # return(shp)
+#}), tolower(names(shapefile_list)))  # also convert names to lowercase here
+
+
+
 
 ################### Save each processed layer to .gpkg ########################
 
@@ -122,8 +129,30 @@ for (name in names(shapefile_list)) {
 
 View(shapefile_list)
 
+
+###############################################################################
 ####### DO NOT NEED TO RUN SHAPEFILES NOW THAT .GPKG FILES ARE CREATED ######
-########################START HERE TO HELP MEMORY ###################
+######################## START HERE ###################################
+install.packages("RColorBrewer")
+
+library(sf)
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(ggspatial)
+library(leaflet)
+library(htmlwidgets) #save html package 
+library(webshot2)
+library(rmapshaper) # simplify shapefiles
+library(viridisLite)
+library(RColorBrewer)
+
+
+###### DIRECTORIES ######
+
+getwd()
+#"C:/Users/Sarah/Documents/GitHub/2025-EFH-5-year-Review"
+
 gpkg_dir <- "C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/2025 GIS Clipped Habitat/Converted_GPKG"
 dir.create(gpkg_dir, showWarnings = FALSE)
 
@@ -131,10 +160,28 @@ dir.create(gpkg_dir, showWarnings = FALSE)
 gpkg_files <- list.files(gpkg_dir, pattern = "\\.gpkg$", full.names = TRUE)
 View(gpkg_files)
 
+# Define base output directory for saving all files
+output_dir <- "C:/Users/Sarah/OneDrive - GOM/Desktop/Generic AM 5 GIS files/Maps_Output"
+
+# Define directory for shapefiles inside the output directory
+shp_dir <- file.path(output_dir, "Shapefiles")
+
+# Create the shapefiles directory if it doesn't exist
+dir.create(shp_dir, showWarnings = FALSE)
+
+# Optional: Also create an "HTML_Maps" directory for the map HTML/PNG files
+maps_dir <- file.path(output_dir, "HTML_Maps")
+dir.create(maps_dir, showWarnings = FALSE)
+
+# Print paths to check if directories are created correctly
+print(paste("Shapefiles will be saved to:", shp_dir))
+print(paste("Maps (HTML/PNG) will be saved to:", maps_dir))
+
 # Initialize an empty list to store the shapefiles from the .gpkg files
 shapefile_list <- list()
 
-# Loop through the .gpkg files and read the layers
+##### Loop through the .gpkg files and read the layers #####
+
 for (file in gpkg_files) {
   # Get the available layers in the .gpkg file
   layers <- st_layers(file)$name
@@ -150,7 +197,7 @@ for (file in gpkg_files) {
     layer_name_parts <- strsplit(layer, "_")[[1]]
     correct_name <- paste(tolower(layer_name_parts[1]), 
                           tolower(layer_name_parts[2]), 
-                          toupper(layer_name_parts[3]), 
+                          tolower(layer_name_parts[3]), 
                           sep = "_")
     
     # Store the shapefile in the list with the corrected name
@@ -158,11 +205,8 @@ for (file in gpkg_files) {
   }
 }
 
-# Rename shapefile list elements to lowercase
-names(shapefile_list) <- tolower(names(shapefile_list))
+names(shapefile_list) <- tolower(names(shapefile_list)) #double check all are lower
 
-# View the list of shapefiles with corrected names
-View(shapefile_list)
 
 ######################### .gpkg summary ####################################
 
@@ -184,16 +228,14 @@ shapefile_summary <- lapply(names(shapefile_list), function(name) {
 View(shapefile_summary)
 
 
-####test plot with .gpkg files ###
-
-library(leaflet)
+##### test plot with .gpkg files #####
 
 # Extract the layers
 wca_layer <- shapefile_list[["wca_off_er1"]]
-mangrove_layer <- shapefile_list[["mangrove_est_er2"]]
+hb_layer <- shapefile_list[["hb_est_er2"]]
 
 str(wca_layer)
-str(mangrove_layer)
+str(hb_layer)
 
 # Basic leaflet map
 leaflet() %>%
@@ -205,15 +247,15 @@ leaflet() %>%
               weight = 1,
               group = "WCA OFF ER1",
               label = ~paste("WCA")) %>%
-  addPolygons(data = mangrove_layer, 
+  addPolygons(data = hb_layer, 
               fillColor = "green", 
               fillOpacity = 0.5, 
               color = "green", 
               weight = 1,
-              group = "Mangrove EST ER2",
-              label = ~paste("Mangrove")) %>%
+              group = "HB EST ER2",
+              label = ~paste("HB")) %>%
   addLayersControl(
-    overlayGroups = c("WCA OFF ER1", "Mangrove EST ER2"),
+    overlayGroups = c("WCA OFF ER1", "HB EST ER2"),
     options = layersControlOptions(collapsed = FALSE)
   )
 
@@ -233,13 +275,13 @@ leaflet() %>%
               weight = 1,
               group = "WCA OFF ER1",
               label = ~paste("WCA")) %>%
-  addPolygons(data = mangrove_layer, 
+  addPolygons(data = hb_layer, 
               fillColor = "green", 
               fillOpacity = 0.5, 
               color = "green", 
               weight = 1,
-              group = "Mangrove EST ER2",
-              label = ~paste("Mangrove")) %>%
+              group = "HB EST ER2",
+              label = ~paste("HB")) %>%
   addPolygons(data = em_est_er1, 
               fillColor = "purple", 
               fillOpacity = 0.5, 
@@ -248,7 +290,7 @@ leaflet() %>%
               group = "EM EST ER1",
               label = ~paste("EM EST ER1")) %>%
   addLayersControl(
-    overlayGroups = c("WCA OFF ER1", "Mangrove EST ER2", "EM EST ER1"),
+    overlayGroups = c("WCA OFF ER1", "HB EST ER2", "EM EST ER1"),
     options = layersControlOptions(collapsed = FALSE)
   )
 
@@ -347,7 +389,7 @@ print(efh_map)
 
 # Define lifestages and assign colorblind-safe colors
 lifestages <- unique(Gag_clean$Lifestage)
-stage_colors <- setNames(viridis(length(lifestages)), lifestages)
+stage_colors <- setNames(brewer.pal(length(lifestages), "Set2"), lifestages)
 
 # Loop through each lifestage
 for (stage in lifestages) {
@@ -388,7 +430,7 @@ for (stage in lifestages) {
         efh_map <- efh_map %>%
           addPolygons(data = shp,
                       fillColor = color,
-                      fillOpacity = 0.5,
+                      fillOpacity = 0.75,
                       color = color,
                       weight = 1,
                       group = shape_name,
@@ -399,12 +441,11 @@ for (stage in lifestages) {
     }
   }
   
-  # Add layers control
-  efh_map <- efh_map %>%
-    addLayersControl(
-      overlayGroups = shapes,
-      options = layersControlOptions(collapsed = FALSE)
-    )
+  # Add layers control- select layers 
+  #efh_map <- efh_map %>%
+   # addLayersControl(
+    #  overlayGroups = shapes,
+     # options = layersControlOptions(collapsed = FALSE))
   
   # 🔄 Show map in Viewer pane
   print(efh_map)
